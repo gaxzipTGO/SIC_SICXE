@@ -1362,7 +1362,7 @@ void LoadingInital() {
 
 int main()
 {
-    /*
+    
     cout << hexToBinary("0",15) ;
     
     LoadingInital() ;
@@ -1383,8 +1383,7 @@ int main()
         assembler1.PrintAllMessage() ;
         cin >> file_name ;
     }while ( file_name != "0" ) ;
-    */
-   cout << hexToBinary("-12",12) ;
+    
     
 }
 
