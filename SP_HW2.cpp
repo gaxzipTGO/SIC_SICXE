@@ -1127,9 +1127,9 @@ class SICXE : public SIC {
 
     protected: string CheakFlag(AssemblerRemember &LineProgram, int format) {
         string flag = "" ;
-        char n = '0' ;
+        char n = '1' ;
         char e = '0' ;
-        char i = '0' ;
+        char i = '1' ;
         char b = '0' ;
         char p = '0' ;
         char x = '0' ;
@@ -1140,7 +1140,20 @@ class SICXE : public SIC {
             if ( program.programToken == "X" ) {
                 x = '1' ;
             }
+            if ( program.programToken == "@" ) {
+                i = '0' ;
+            }
+            if ( program.programToken == "#" ) {
+                n = '0' ;
+            }
+            if ( program.programToken == "B" ) {
+                b = '1' ;
+            }
+            if  ( program.programToken == "PC" ) {
+                p = '1' ;
+            }
         }
+        flag = n + i + x + b + p + e ; 
         return flag ;
     }
 
@@ -1381,7 +1394,7 @@ void LoadingInital() {
 
 int main()
 {
-    
+    /*
     cout << hexToBinary("0",15) ;
     
     LoadingInital() ;
@@ -1403,7 +1416,7 @@ int main()
         cin >> file_name ;
     }while ( file_name != "0" ) ;
     
-    
+    */
 }
 
 /*
