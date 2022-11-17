@@ -1158,7 +1158,8 @@ class SICXE : public SIC {
     }
 
     protected: void Transaction_Adress( AssemblerRemember &LineProgram, int format ) override {
-       /* 11/8 */
+       LineProgram.ObCode = LineProgram.ObCode + CheakFlag( LineProgram,format ) ;
+       
     }
 
     protected: int Transaction_ObCode( AssemblerRemember &LineProgram ) override {
