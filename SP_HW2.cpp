@@ -1125,6 +1125,25 @@ class SICXE : public SIC {
         return false ;
     }
 
+    protected: string CheakFlag(AssemblerRemember &LineProgram, int format) {
+        string flag = "" ;
+        char n = '0' ;
+        char e = '0' ;
+        char i = '0' ;
+        char b = '0' ;
+        char p = '0' ;
+        char x = '0' ;
+        if ( format == 4 ) {
+            e = '1' ;
+        }
+        for ( auto program : LineProgram.program ) {
+            if ( program.programToken == "X" ) {
+                x = '1' ;
+            }
+        }
+        return flag ;
+    }
+
     protected: void Transaction_Adress( AssemblerRemember &LineProgram, int format ) override {
        /* 11/8 */
     }
