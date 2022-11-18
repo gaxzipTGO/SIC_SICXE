@@ -171,6 +171,7 @@ int hexToDec( string hex ) {
     return stoi(hex,0,16) ;
 }
 
+
 class GetTokenMachine {
     protected: fstream fin ;
     protected: string token = "" ;
@@ -349,6 +350,7 @@ struct AssemblerRemember{
     string location = "" ;
     vector<Token> program ;
     string ObCode = "" ;
+    int format = 0 ;
 
 } ;
 
@@ -671,7 +673,7 @@ class SIC : public Assembler {
         }
     }
 
-    protected: void FindLog( AssemblerRemember &LineProgram ) {
+    protected: void FindLog( AssemblerRemember &LineProgram,int bit ) {
         string label = "" ;
         for ( int i = 0 ; i < LineProgram.program.size() && label == "" ; i ++ ) {
             if ( LineProgram.program[i].tokenPage == 0 ) {
@@ -685,12 +687,12 @@ class SIC : public Assembler {
         for ( int i = 0 ; i < temp_memory.size() && ( temp_memory[i].location != "" || temp_memory[i].state == 2 )  ; i ++ ) {
             if ( temp_memory[i].state != 2 ) {
                 if ( temp_memory[i].program[0].tokenPage == 6 && temp_memory[i].program[0].programToken == label ) { // 找跟他一樣的label
-                    LineProgram.ObCode = tempObcode + hexToBinary(temp_memory[i].location,15) ;
+                    LineProgram.ObCode = tempObcode + hexToBinary(temp_memory[i].location,bit) ;
                     LineProgram.state = 1 ;
                     LineProgram.finished = true ; // 找的到就把他改好
                 }
                 else if ( LineProgram.program.size() == 1 ) {
-                    LineProgram.ObCode = tempObcode + hexToBinary("0",15) ;
+                    LineProgram.ObCode = tempObcode + hexToBinary("0",bit) ;
                     LineProgram.state = 1 ;
                     LineProgram.finished = true ;
                 }
@@ -720,7 +722,7 @@ class SIC : public Assembler {
         else {
             LineProgram.ObCode = LineProgram.ObCode + "0" ;
         }
-        FindLog( LineProgram ) ;
+        FindLog( LineProgram,15 ) ;
     }
 
     protected: string toLower(string str) {
@@ -886,13 +888,13 @@ class SIC : public Assembler {
         } // for 逐行讀取
     }
 
-    public: void PassTwo() {
+    public:virtual void PassTwo() {
         for( auto &LineProgram : temp_memory ) {
             if ( LineProgram.finished == false ) {
                 bool IsPseudo = CheakIsPseudo(LineProgram) ;
                 if (! IsPseudo ) {
                     if ( LineProgram.state != 2 ) {
-                        FindLog( LineProgram ) ;
+                        FindLog( LineProgram,15 ) ;
                     }                    
                 }
                 
@@ -1131,7 +1133,7 @@ class SICXE : public SIC {
         char e = '0' ;
         char i = '1' ;
         char b = '0' ;
-        char p = '0' ;
+        char p = '1' ;
         char x = '0' ;
         if ( format == 4 ) {
             e = '1' ;
@@ -1157,9 +1159,58 @@ class SICXE : public SIC {
         return flag ;
     }
 
+    public: string CountDisp( string nowlocationString, string dislocationString ) {
+        int nowlocation = hexToDec( nowlocationString ) ;
+        int distination = hexToDec( dislocationString  ) ;
+        int final =  distination - nowlocation ;
+        stringstream s ;
+        s << hex << final ;
+        string Disp ;
+        s >> Disp ;
+        Disp = hexToBinary(Disp,12) ;
+        return Disp ;
+    }
+
+    protected: void FindDisp( AssemblerRemember &LineProgram, int bit ) {
+        
+        string label = "" ;
+        string PC = "" ;
+        for ( int i = 0 ; i < LineProgram.program.size() && label == "" ; i ++ ) {
+            if ( LineProgram.program[i].tokenPage == 0 ) {
+                i ++ ; 
+                if ( i < LineProgram.program.size() && LineProgram.program[i].tokenPage == 6 ) {
+                    label = LineProgram.program[i].programToken ;
+                    PC = PlusHexToLog(LineProgram.location,3) ;
+                }
+            }
+        } // 找這行的label
+        string tempObcode = LineProgram.ObCode ;
+        for ( int i = 0 ; i < temp_memory.size() && ( temp_memory[i].location != "" || temp_memory[i].state == 2 )  ; i ++ ) {
+            if ( temp_memory[i].state != 2 ) {
+                if ( temp_memory[i].program[0].tokenPage == 6 && temp_memory[i].program[0].programToken == label ) { // 找跟他一樣的label
+                    LineProgram.ObCode = tempObcode + CountDisp(PC,temp_memory[i].location) ;
+                    LineProgram.state = 1 ;
+                    LineProgram.finished = true ; // 找的到就把他改好
+
+                }
+                else if ( LineProgram.program.size() == 1 ) {
+                    LineProgram.ObCode = tempObcode + hexToBinary("0",bit) ;
+                    LineProgram.state = 1 ;
+                    LineProgram.finished = true ;
+                }
+            }
+        }        
+        
+    }
+
     protected: void Transaction_Adress( AssemblerRemember &LineProgram, int format ) override {
        LineProgram.ObCode = LineProgram.ObCode + CheakFlag( LineProgram,format ) ;
-       
+       if ( format == 3 ) {
+        FindDisp(LineProgram,12) ;
+       }
+       else if ( format == 4 ) {
+        FindLog(LineProgram,20) ;
+       }
     }
 
     protected: int Transaction_ObCode( AssemblerRemember &LineProgram ) override {
@@ -1178,6 +1229,7 @@ class SICXE : public SIC {
                     case 1 :
                         LineProgram.ObCode = LineProgram.ObCode + hexToBinary(temp.opcode,8) ;
                         LineProgram.state = 1 ;
+                        LineProgram.format = 1 ;
                         LineProgram.finished = true ; // 找的到就把他改好
                         break ;
                     case 2 :
@@ -1191,12 +1243,14 @@ class SICXE : public SIC {
                             LineProgram.ObCode = LineProgram.ObCode + hexToBinary(temp.opcode,8) + hexToBinary(s1.str(),4) + hexToBinary("0",4);
                         }
                         LineProgram.state = 1 ;
+                        LineProgram.format = 2 ;
                         LineProgram.finished = true ; // 找的到就把他改好    
                         break ;
                     case 3 :
                         if ( LineProgram.program[0].programToken == "+" ) {
                             LineProgram.ObCode[7] =  '\0' ;
                             LineProgram.ObCode[6] = '\0' ;
+                            LineProgram.format = 4 ;
                             Transaction_Adress(LineProgram, 4) ;
                             return 4 ;
                         }
@@ -1204,6 +1258,7 @@ class SICXE : public SIC {
                             LineProgram.ObCode = LineProgram.ObCode + hexToBinary(temp.opcode,8) ;
                             LineProgram.ObCode[7] =  '\0' ;
                             LineProgram.ObCode[6] = '\0' ;
+                            LineProgram.format = 3 ;
                             Transaction_Adress(LineProgram, temp.format) ;
                         }
                         break ;
@@ -1214,6 +1269,25 @@ class SICXE : public SIC {
             } // 有找到instr
         }
         return 3 ;
+    }
+
+    public: void PassTwo() override {
+        for( auto &LineProgram : temp_memory ) {
+            if ( LineProgram.finished == false ) {
+                bool IsPseudo = CheakIsPseudo(LineProgram) ;
+                if (! IsPseudo ) {
+                    if ( LineProgram.state != 2 ) {
+                        if ( LineProgram.format == 3 ) {
+                            FindDisp( LineProgram,12 ) ;
+                        }
+                        else if ( LineProgram.format == 4 ) {
+                            FindLog( LineProgram,20 ) ;
+                        }
+                    }                    
+                }
+                
+            }
+        }
     }
 
 
@@ -1395,6 +1469,16 @@ void LoadingInital() {
 
 int main()
 {
+    string first_location = "0012" ;
+    string second_location = "0000" ;
+    stringstream s ;
+    string final_location ;
+    int x = hexToDec(first_location) ;
+    int y = hexToDec(second_location) ;
+    s << hex << y - x ;
+    s >> final_location ;
+    cout << final_location ;
+    cout << hexToBinary(final_location,12) ;
     /*
     cout << hexToBinary("0",15) ;
     
