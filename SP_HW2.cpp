@@ -1129,33 +1129,35 @@ class SICXE : public SIC {
 
     protected: string CheakFlag(AssemblerRemember &LineProgram, int format) {
         string flag = "" ;
-        char n = '1' ;
-        char e = '0' ;
-        char i = '1' ;
-        char b = '0' ;
-        char p = '1' ;
-        char x = '0' ;
+        string n = "1" ;
+        string e = "0" ;
+        string i = "1" ;
+        string b = "0" ;
+        string p = "1" ;
+        string x = "0" ;
         if ( format == 4 ) {
-            e = '1' ;
+            e = "1" ;
+            p = "0" ;
         }
         for ( auto program : LineProgram.program ) {
             if ( program.programToken == "X" ) {
-                x = '1' ;
+                x = "1" ;
             }
             if ( program.programToken == "@" ) {
-                i = '0' ;
+                i = "0" ;
             }
             if ( program.programToken == "#" ) {
-                n = '0' ;
+                n = "0" ;
             }
             if ( program.programToken == "B" ) {
-                b = '1' ;
+                b = "1" ;
             }
             if  ( program.programToken == "PC" ) {
-                p = '1' ;
+                p = "1" ;
             }
         }
-        flag = n + i + x + b + p + e ; 
+        flag = n + i + x + b + p + e ;
+
         return flag ;
     }
 
@@ -1175,28 +1177,40 @@ class SICXE : public SIC {
         
         string label = "" ;
         string PC = "" ;
+        int token_page = 0 ;
         for ( int i = 0 ; i < LineProgram.program.size() && label == "" ; i ++ ) {
             if ( LineProgram.program[i].tokenPage == 0 ) {
                 i ++ ; 
-                if ( i < LineProgram.program.size() && LineProgram.program[i].tokenPage == 6 ) {
+                if ( i < LineProgram.program.size() && LineProgram.program[i].tokenPage == 6 || LineProgram.program[i].tokenPage == 4 ) {
                     label = LineProgram.program[i].programToken ;
-                    PC = PlusHexToLog(LineProgram.location,3) ;
+                    PC = PlusHexToLog(nowLocation,3) ;
+                    token_page = LineProgram.program[i].tokenPage ;
+                    
                 }
             }
         } // 找這行的label
         string tempObcode = LineProgram.ObCode ;
         for ( int i = 0 ; i < temp_memory.size() && ( temp_memory[i].location != "" || temp_memory[i].state == 2 )  ; i ++ ) {
             if ( temp_memory[i].state != 2 ) {
-                if ( temp_memory[i].program[0].tokenPage == 6 && temp_memory[i].program[0].programToken == label ) { // 找跟他一樣的label
-                    LineProgram.ObCode = tempObcode + CountDisp(PC,temp_memory[i].location) ;
+                if ( token_page != 4 ) {
+                    if ( temp_memory[i].program[0].tokenPage == 6 && temp_memory[i].program[0].programToken == label ) { // 找跟他一樣的label
+                        LineProgram.ObCode = tempObcode + CountDisp(PC,temp_memory[i].location) ;
+                        LineProgram.state = 1 ;
+                        LineProgram.finished = true ; // 找的到就把他改好
+
+                    }
+                    else if ( LineProgram.program.size() == 1 ) {
+                        LineProgram.ObCode = tempObcode + hexToBinary("0",bit) ;
+                        LineProgram.state = 1 ;
+                        LineProgram.finished = true ;
+                    }
+                }
+                else {
+                    tempObcode[10] = '0' ;
+                    LineProgram.ObCode = tempObcode + hexToBinary(label,bit) ;
                     LineProgram.state = 1 ;
                     LineProgram.finished = true ; // 找的到就把他改好
-
-                }
-                else if ( LineProgram.program.size() == 1 ) {
-                    LineProgram.ObCode = tempObcode + hexToBinary("0",bit) ;
-                    LineProgram.state = 1 ;
-                    LineProgram.finished = true ;
+                    break ;
                 }
             }
         }        
@@ -1247,17 +1261,14 @@ class SICXE : public SIC {
                         LineProgram.finished = true ; // 找的到就把他改好    
                         break ;
                     case 3 :
-                        if ( LineProgram.program[0].programToken == "+" ) {
-                            LineProgram.ObCode[7] =  '\0' ;
-                            LineProgram.ObCode[6] = '\0' ;
+                        LineProgram.ObCode = hexToBinary(temp.opcode,8) ;
+                        LineProgram.ObCode.erase(6,2) ;
+                        if ( LineProgram.program[0].programToken == "+" ) {                           
                             LineProgram.format = 4 ;
                             Transaction_Adress(LineProgram, 4) ;
                             return 4 ;
                         }
                         else {
-                            LineProgram.ObCode = LineProgram.ObCode + hexToBinary(temp.opcode,8) ;
-                            LineProgram.ObCode[7] =  '\0' ;
-                            LineProgram.ObCode[6] = '\0' ;
                             LineProgram.format = 3 ;
                             Transaction_Adress(LineProgram, temp.format) ;
                         }
@@ -1469,19 +1480,7 @@ void LoadingInital() {
 
 int main()
 {
-    string first_location = "0012" ;
-    string second_location = "0000" ;
-    stringstream s ;
-    string final_location ;
-    int x = hexToDec(first_location) ;
-    int y = hexToDec(second_location) ;
-    s << hex << y - x ;
-    s >> final_location ;
-    cout << final_location ;
-    cout << hexToBinary(final_location,12) ;
-    /*
-    cout << hexToBinary("0",15) ;
-    
+
     LoadingInital() ;
     string file_name = "" ;
     Program_Token program_token ;
@@ -1501,16 +1500,5 @@ int main()
         cin >> file_name ;
     }while ( file_name != "0" ) ;
     
-    */
+    
 }
-
-/*
-todo list
-  11/8 : 
-  *寫一個判斷 direct indirect imiediate 的function 
-  *寫一個判斷 X 的function
-  *寫一個判斷 p b null 的function
-  *把他六個bit加上去
-
-
-*/
