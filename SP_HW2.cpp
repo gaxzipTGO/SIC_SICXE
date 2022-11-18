@@ -351,6 +351,7 @@ struct AssemblerRemember{
     vector<Token> program ;
     string ObCode = "" ;
     int format = 0 ;
+    string base_register = "" ;
 
 } ;
 
@@ -743,6 +744,10 @@ class SIC : public Assembler {
         return str ;
     }
 
+    protected: void FindLogBase(){
+        
+    }
+
     protected: virtual int Transaction_ObCode( AssemblerRemember &LineProgram ) {
         /*
         他會先根據instruct的opCode來找出前面8個byte
@@ -762,74 +767,79 @@ class SIC : public Assembler {
     }
 
     protected: void Transaction_Psedo_ObCode( AssemblerRemember &LineProgram,string PseudoCode ) {
-        if ( PseudoCode != "BYTE" && PseudoCode != "WORD" ) {
-            LineProgram.state = 1 ;
-            LineProgram.finished = true ;
-            LineProgram.ObCode ="" ;
-            if ( PseudoCode == "RESB" ) {
-                int temp = stoi( LineProgram.program[LineProgram.program.size()-1].programToken ) ;
-                SettingItSelfAndPlusNextLog( LineProgram, temp ) ; 
-            }
-            else if ( PseudoCode == "EQU" ) {
-                int temp = stoi( LineProgram.program[LineProgram.program.size()-1].programToken ) ;
-                LineProgram.location = PlusHexToLog( "0000",temp ) ;
+        if ( PseudoCode != "BASE" ) {
+            if ( PseudoCode != "BYTE" && PseudoCode != "WORD" ) {
+                LineProgram.state = 1 ;
+                LineProgram.finished = true ;
+                LineProgram.ObCode ="" ;
+                if ( PseudoCode == "RESB" ) {
+                    int temp = stoi( LineProgram.program[LineProgram.program.size()-1].programToken ) ;
+                    SettingItSelfAndPlusNextLog( LineProgram, temp ) ; 
+                }
+                else if ( PseudoCode == "EQU" ) {
+                    int temp = stoi( LineProgram.program[LineProgram.program.size()-1].programToken ) ;
+                    LineProgram.location = PlusHexToLog( "0000",temp ) ;
+                }
+                else {
+                    SettingItSelfAndPlusNextLog( LineProgram, 3 ) ; 
+                }
             }
             else {
-                SettingItSelfAndPlusNextLog( LineProgram, 3 ) ; 
+                if ( PseudoCode == "BYTE" || PseudoCode == "WORD" ) {
+                    for( int i = 0 ; i < LineProgram.program.size() ; i ++ ) {
+                        if ( LineProgram.program[i].programToken == "BYTE" || LineProgram.program[i].programToken == "WORD" ) {
+                            i ++ ;
+                            if ( LineProgram.program[i].programToken == "X" ) {
+                                i ++ ; // 這裡可以得到X後或C後的字串
+                                string opcode = "" ;
+                                for ( int j = 0 ; j < LineProgram.program[i].programToken.size() ; j ++ ) {
+                                    if ( LineProgram.program[i].programToken[j] != '\'' ) {
+                                        opcode = opcode + LineProgram.program[i].programToken[j] ;
+                                    }
+                                }
+                                int size = (opcode.size()+1)/2 ;
+                                LineProgram.ObCode = hexToBinary(opcode,size*8) ;
+                                LineProgram.state = 1 ;
+                                LineProgram.finished = true ;
+                                SettingItSelfAndPlusNextLog( LineProgram, size ) ; 
+                            }
+                            else if ( LineProgram.program[i].programToken == "C" ) {
+                                i ++ ; // 這裡可以得到X後或C後的字串
+                                string opcode = "" ;
+                                stringstream ss ;
+                                for ( int j = 0 ; j < LineProgram.program[i].programToken.size() ; j ++ ) {
+                                    if ( LineProgram.program[i].programToken[j] != '\'' ) {
+                                        ss << hex << (int)LineProgram.program[i].programToken[j] ;
+                                    }
+                                }
+                                opcode = ss.str() ;
+                                for ( ; opcode.size() < 6 ; ) {
+                                    opcode = '0'+ opcode ;
+                                }
+
+                                LineProgram.ObCode = hexToBinary(opcode,24) ;
+                                LineProgram.state = 1 ;
+                                LineProgram.finished = true ;
+                            }
+                            else {
+                                string opcode = "" ;
+                                opcode = LineProgram.program[i].programToken ;
+                                for ( ; opcode.size() < 6 ; ) {
+                                    opcode = '0'+ opcode ;
+                                }
+                                LineProgram.ObCode = hexToBinary(opcode,24) ;
+                                LineProgram.state = 1 ;
+                                LineProgram.finished = true ;
+                            }
+                            SettingItSelfAndPlusNextLog( LineProgram, 3 ) ;;
+                        }
+                    }
+                }
+                SettingItSelfAndPlusNextLog( LineProgram, 3 )  ;
             }
         }
         else {
-            if ( PseudoCode == "BYTE" || PseudoCode == "WORD" ) {
-                for( int i = 0 ; i < LineProgram.program.size() ; i ++ ) {
-                    if ( LineProgram.program[i].programToken == "BYTE" || LineProgram.program[i].programToken == "WORD" ) {
-                        i ++ ;
-                        if ( LineProgram.program[i].programToken == "X" ) {
-                            i ++ ; // 這裡可以得到X後或C後的字串
-                            string opcode = "" ;
-                            for ( int j = 0 ; j < LineProgram.program[i].programToken.size() ; j ++ ) {
-                                if ( LineProgram.program[i].programToken[j] != '\'' ) {
-                                    opcode = opcode + LineProgram.program[i].programToken[j] ;
-                                }
-                            }
-                            int size = (opcode.size()+1)/2 ;
-                            LineProgram.ObCode = hexToBinary(opcode,size*8) ;
-                            LineProgram.state = 1 ;
-                            LineProgram.finished = true ;
-                            SettingItSelfAndPlusNextLog( LineProgram, size ) ; 
-                        }
-                        else if ( LineProgram.program[i].programToken == "C" ) {
-                            i ++ ; // 這裡可以得到X後或C後的字串
-                            string opcode = "" ;
-                            stringstream ss ;
-                            for ( int j = 0 ; j < LineProgram.program[i].programToken.size() ; j ++ ) {
-                                if ( LineProgram.program[i].programToken[j] != '\'' ) {
-                                    ss << hex << (int)LineProgram.program[i].programToken[j] ;
-                                }
-                            }
-                            opcode = ss.str() ;
-                            for ( ; opcode.size() < 6 ; ) {
-                                opcode = '0'+ opcode ;
-                            }
-
-                            LineProgram.ObCode = hexToBinary(opcode,24) ;
-                            LineProgram.state = 1 ;
-                            LineProgram.finished = true ;
-                        }
-                        else {
-                            string opcode = "" ;
-                            opcode = LineProgram.program[i].programToken ;
-                            for ( ; opcode.size() < 6 ; ) {
-                                opcode = '0'+ opcode ;
-                            }
-                            LineProgram.ObCode = hexToBinary(opcode,24) ;
-                            LineProgram.state = 1 ;
-                            LineProgram.finished = true ;
-                        }
-                        SettingItSelfAndPlusNextLog( LineProgram, 3 ) ;;
-                    }
-                }
-            }
-            SettingItSelfAndPlusNextLog( LineProgram, 3 )  ;
+            FindLogBase() ;
         }
     }
 
@@ -1502,3 +1512,8 @@ int main()
     
     
 }
+/*
+11/18
+基礎題全部搞定 處理進階問題
+先從base開始
+*/
