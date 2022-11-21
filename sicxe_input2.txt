@@ -1,0 +1,27 @@
+SICXE   START   0
+A1      RESW    10
+A2      RESB    200
+STR1    WORD    C'ACC'
+L1      FLOAT
+        STS     T2
+        DIVF    NUM2
+        ADDR    F,L
+L2      +JGT    L1
+        LDCH    A2,X
+        JLT     0
+        LDB     #2
+        j       L1
+L3      +LDT    #768955
+T1      EQU     100
+T2      EQU     200
+        LDB     T1,X
+L4      TIXR    X
+        AND     @A1
+        COMP    @NUM3
+NUM1    BYTE    X'FF'
+NUM2    BYTE    0
+NUM3    WORD    100
+STR2    BYTE    C'HELLO'
+L5      +LPS    @STR1
+        MUL     #NUM1
+FINAL   END     SICXE

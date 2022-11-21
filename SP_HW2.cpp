@@ -27,6 +27,9 @@ Page_Token g_delimiterTable ;
 Page_Token g_numberTable ;
 Page_Token g_stringTable ;
 Page_Token g_otherTable ;
+string numbertable[100] ;
+string stringtable[100] ;
+string labeltable[100] ;
 
 
 struct Instruction {
@@ -67,7 +70,7 @@ void loadingMap( map<string, Instruction> &loadIngMap ) {
     loadIngMap["ldx"] = {3,"04"} ;
     loadIngMap["lps"] = {3,"D0"} ;
     loadIngMap["mul"] = {3,"20"} ;
-    loadIngMap["mulf"] = {1,"60"} ;
+    loadIngMap["mulf"] = {3,"60"} ;
     loadIngMap["mulr"] = {2,"98"} ;
     loadIngMap["norm"] = {1,"C8"} ;
     loadIngMap["or"] = {3,"44"} ;
@@ -149,6 +152,9 @@ string BinarytoHex(string log) {
     }
     hexString = hexString + char(toupper( FourBitToHex(temp) )) ; 
     temp = "" ;  
+    for ( int i = 0 ; i < hexString.size() ; i ++ ) {
+        hexString[i] = char(toupper(hexString[i])) ;
+    }
     return hexString ;
 }
 
@@ -171,6 +177,18 @@ int hexToDec( string hex ) {
     return stoi(hex,0,16) ;
 }
 
+bool CheakCanTranToNum( string hex ) {
+    try
+    {
+        int dex = stoi(hex,nullptr,16) ;
+        return true ;
+    }
+    catch(const std::exception& e)
+    {
+        return false ;
+    }
+    
+}
 
 class GetTokenMachine {
     protected: fstream fin ;
@@ -351,7 +369,7 @@ struct AssemblerRemember{
     vector<Token> program ;
     string ObCode = "" ;
     int format = 0 ;
-    string base_register = "" ;
+
 
 } ;
 
@@ -360,6 +378,7 @@ class Assembler{
     protected: string nowLocation = "0000" ;
     protected: vector<AssemblerRemember> temp_memory ;
     protected: string thisPsedoCode = "" ;
+    protected: string base_register = "" ;
 
     public: void LoadingProgram( vector<Token> nowProgram ) {
         /*
@@ -396,14 +415,31 @@ class Assembler{
                 else {
                     cout << '\t' ;
                 }
+                bool tab = false ;
+                int size = 0 ;
                 for ( auto program : temp_memory[now].program ) {
-                    cout << program.programToken << '\t' ;           
+                    if ( tab == true ) {
+                        if ( program.programToken != "," && program.programToken != "-"  && program.programToken != "/" ) {
+                            cout << '\t' ;
+                            size ++ ;
+                        }
+                        tab = false ;
+                    }
+                    cout << program.programToken ;
+                    if ( program.programToken != "+" && program.programToken != "#" && program.programToken != "@" && 
+                         program.programToken != "C" && program.programToken != "X" && program.programToken != "," &&
+                         program.programToken != "-" && program.programToken != "*" && program.programToken != "/" && program.programToken != "="  ) {
+                        tab = true ;
+                    }           
                 }
                 if ( temp_memory[now].finished ) {
                     if ( temp_memory[now].ObCode == "") {
                         cout << endl ;
                     }
                     else {
+                        for ( ; size < 4 ; size ++ ) {
+                            cout << '\t' ;
+                        }
                         cout << BinarytoHex(temp_memory[now].ObCode) << endl ;
                     }
                 }
@@ -412,6 +448,52 @@ class Assembler{
                 }
             }
         }
+    }
+
+    public: void WriteFile( string fileName ) {
+        bool comment = false ;
+        ofstream out ;
+        out.open("out_"+fileName) ;
+        for ( int now = 0 ; now < temp_memory.size() ; now ++ ) { 
+            if ( temp_memory[now].state != 2 ) {
+                out << temp_memory[now].line << '\t' ;
+                if ( temp_memory[now].location != "-99999" ) {
+                    out << temp_memory[now].location << '\t';
+                }
+                else {
+                    out << '\t' ;
+                }
+                bool tab = false ;
+                int size = 0 ;
+                for ( auto program : temp_memory[now].program ) {
+                    if ( tab == true ) {
+                        if ( program.programToken != "," ) {
+                            out << '\t' ;
+                            size ++ ;
+                        }
+                        tab = false ;
+                    }
+                    out << program.programToken ;
+                    if ( program.programToken != "+" && program.programToken != "#" && program.programToken != "@" && program.programToken != "C" && program.programToken != "X" && program.programToken != ","  ) {
+                        tab = true ;
+                    }           
+                }
+                if ( temp_memory[now].finished ) {
+                    if ( temp_memory[now].ObCode == "") {
+                        out << endl ;
+                    }
+                    else {
+                        for ( ; size < 5 ; size ++ ) {
+                            out << '\t' ;
+                        }
+                        out << BinarytoHex(temp_memory[now].ObCode) << endl ;
+                    }
+                }
+                else {
+                    out << endl ;
+                }
+            }
+        }        
     }
 
     protected: void SyntaxError() {
@@ -471,6 +553,7 @@ class Assembler{
 
 class SIC : public Assembler {
 
+    protected: string cheakedPseudo = "" ;
     protected: bool CheakIsPseudo( AssemblerRemember cheakedProgram ) {
         /*
         該行讀入後確定是否擁有pseudo code 如果是 回傳true 不是 回傳false
@@ -479,12 +562,11 @@ class SIC : public Assembler {
         for( int i = 0 ; i < cheakedProgram.program.size() && ! getTable ; i++ ) {
             if ( cheakedProgram.program[i].tokenPage == 1 ) {
                 getTable = true ;
+                cheakedPseudo = cheakedProgram.program[i].programToken ;
             }
         } // 先確認這裡面有沒有pseudo
         return getTable ;
     }
-
-
 
     protected: bool CheakPsedoCodeSysaxFinal( AssemblerRemember cheakedProgram, int position ) {
         int cheakNum = 0 ;
@@ -495,7 +577,7 @@ class SIC : public Assembler {
             cheakNum ++ ;
             switch ( position ) {
             case 0 :
-                if ( cheakedProgram.program[cheakNum].tokenPage == 4 ) {
+                if ( cheakedProgram.program[cheakNum].tokenPage == 4 || CheakCanTranToNum( cheakedProgram.program[cheakNum].programToken ) == true ) {
                     thisPsedoCode = g_pseudoInsTable.page_token_no[position][0] ;
                     return true ;
                 }
@@ -674,31 +756,102 @@ class SIC : public Assembler {
         }
     }
 
+    protected: void FindDex( AssemblerRemember &LineProgram,int bit ) {
+        string dex_num = "" ;
+        bool dex_is = false ;
+        for ( int i = 0 ; i < LineProgram.program.size() && dex_num == "" ; i ++ ) {
+            if ( LineProgram.program[i].tokenPage == 0 ) {
+                i ++ ; 
+                if ( i < LineProgram.program.size() && LineProgram.program[i].tokenPage == 4 ) {
+                    dex_num = LineProgram.program[i].programToken ;
+                    dex_is = true ;
+                }
+                else if ( LineProgram.program[i].programToken == "#" || LineProgram.program[i].programToken == "@" ) {
+                    i ++ ;
+                    if ( i < LineProgram.program.size() && LineProgram.program[i].tokenPage == 4 ) {
+                        dex_num = LineProgram.program[i].programToken ;
+                        dex_is = true ;
+                    }
+                }
+            }
+        } // 找這行的dex_num
+        if ( dex_is == true ) {
+            string tempObcode = LineProgram.ObCode ;
+            stringstream s ;
+            string hex_num ;
+            s << hex << stoi(dex_num,nullptr,10) ;
+            s >> hex_num ;
+            LineProgram.ObCode = tempObcode + hexToBinary(hex_num,bit) ;   
+            LineProgram.state = 1 ;
+            LineProgram.finished = true ; 
+        }    
+    }
+
     protected: void FindLog( AssemblerRemember &LineProgram,int bit ) {
+
         string label = "" ;
+        bool imm = false ;
+        bool redict = false ;
+        int token_page = 0 ;
         for ( int i = 0 ; i < LineProgram.program.size() && label == "" ; i ++ ) {
             if ( LineProgram.program[i].tokenPage == 0 ) {
                 i ++ ; 
-                if ( i < LineProgram.program.size() && LineProgram.program[i].tokenPage == 6 ) {
+            }
+            if ( i < LineProgram.program.size() && LineProgram.program[i].tokenPage == 6 || LineProgram.program[i].tokenPage == 4 ) {
+                if ( i != 0 ) {
                     label = LineProgram.program[i].programToken ;
+                    token_page = LineProgram.program[i].tokenPage ;
+                }
+            }
+            if ( LineProgram.program[i].tokenPage == 3 && ( LineProgram.program[i].programToken == "#" || LineProgram.program[i].programToken == "@" ) ) {
+                if ( LineProgram.program[i].programToken == "#" ) {
+                    imm = true ;
+                }
+                else {
+                    redict = true ;
                 }
             }
         } // 找這行的label
         string tempObcode = LineProgram.ObCode ;
-        for ( int i = 0 ; i < temp_memory.size() && ( temp_memory[i].location != "" || temp_memory[i].state == 2 )  ; i ++ ) {
+        for ( int i = 0 ; i < temp_memory.size() && ( temp_memory[i].location != "" || temp_memory[i].state == 2 || temp_memory[i].program[0].programToken == "BASE" )  ; i ++ ) {
             if ( temp_memory[i].state != 2 ) {
-                if ( temp_memory[i].program[0].tokenPage == 6 && temp_memory[i].program[0].programToken == label ) { // 找跟他一樣的label
-                    LineProgram.ObCode = tempObcode + hexToBinary(temp_memory[i].location,bit) ;
+                if ( token_page != 4 ) {
+                    if ( temp_memory[i].program[0].tokenPage == 6 && temp_memory[i].program[0].programToken == label ) { // 找跟他一樣的label
+                        LineProgram.ObCode = tempObcode + hexToBinary(temp_memory[i].location,bit) ;
+                        LineProgram.state = 1 ;
+                        LineProgram.finished = true ; // 找的到就把他改好
+                    }
+                    else if ( LineProgram.program.size() == 1 ) {
+                        for ( int i = 8 ; i < tempObcode.size() ; i ++  ) {
+                            tempObcode[i] = '0' ;
+                        }
+                        LineProgram.ObCode = tempObcode + hexToBinary("0",bit) ;
+                        LineProgram.state = 1 ;
+                        LineProgram.finished = true ;
+                    }
+                }
+
+            }
+        } 
+        if ( LineProgram.state != 1 && LineProgram.finished != true ) {
+            if ( imm == true ) {
+                tempObcode[10] = '0' ;
+                if ( token_page == 4 ) {
+                    LineProgram.ObCode = tempObcode + hexToBinary(label,bit) ;
                     LineProgram.state = 1 ;
                     LineProgram.finished = true ; // 找的到就把他改好
                 }
-                else if ( LineProgram.program.size() == 1 ) {
-                    LineProgram.ObCode = tempObcode + hexToBinary("0",bit) ;
+            }
+            else {
+                tempObcode[10] = '0' ;
+                if ( token_page == 4 ) {
+                    LineProgram.ObCode = tempObcode + hexToBinary(label,bit) ;
                     LineProgram.state = 1 ;
-                    LineProgram.finished = true ;
-                }
+                    LineProgram.finished = true ; // 找的到就把他改好
+                }               
             }
         }
+
     }
 
     protected: virtual void Transaction_Adress( AssemblerRemember &LineProgram, int format ) {
@@ -744,8 +897,31 @@ class SIC : public Assembler {
         return str ;
     }
 
-    protected: void FindLogBase(){
-        
+    protected: void FindLogBase( AssemblerRemember &LineProgram ) {
+
+        string label = "" ;
+        for ( int i = 0 ; i < LineProgram.program.size() && label == "" ; i ++ ) {
+            if ( LineProgram.program[i].programToken == "BASE" ) {
+                i ++ ; 
+                if ( i < LineProgram.program.size() && LineProgram.program[i].tokenPage == 6 ) {
+                    label = LineProgram.program[i].programToken ;
+                }
+            }
+        } // 找這行的label
+        string tempObcode = LineProgram.ObCode ;
+        for ( int i = 0 ; i < temp_memory.size() && ( temp_memory[i].location != "" || temp_memory[i].state == 2 || temp_memory[i].program[0].programToken == "BASE" )  ; i ++ ) {
+            if ( temp_memory[i].state != 2  ) {
+                if ( temp_memory[i].program[0].tokenPage == 6 && temp_memory[i].program[0].programToken == label ) { // 找跟他一樣的label
+                    LineProgram.ObCode = "" ;
+                    base_register = temp_memory[i].location ;
+                    LineProgram.state = 1 ;
+                    LineProgram.finished = true ; // 找的到就把他改好
+                    cheakedPseudo = "" ;
+                }
+
+            }
+        }
+
     }
 
     protected: virtual int Transaction_ObCode( AssemblerRemember &LineProgram ) {
@@ -766,6 +942,18 @@ class SIC : public Assembler {
         return 3 ;
     }
 
+    protected: bool FindThisLocation( string label,string & location ) {
+        for ( auto LineProgram : temp_memory ) {
+            if ( LineProgram.program[0].programToken == label ) {
+                if ( LineProgram.location != "" ) {
+                    location = LineProgram.location ;
+                    return true ;
+                }
+            }
+        }
+        return false ;
+    }
+
     protected: void Transaction_Psedo_ObCode( AssemblerRemember &LineProgram,string PseudoCode ) {
         if ( PseudoCode != "BASE" ) {
             if ( PseudoCode != "BYTE" && PseudoCode != "WORD" ) {
@@ -776,9 +964,62 @@ class SIC : public Assembler {
                     int temp = stoi( LineProgram.program[LineProgram.program.size()-1].programToken ) ;
                     SettingItSelfAndPlusNextLog( LineProgram, temp ) ; 
                 }
+                else if ( PseudoCode == "RESW" ) {
+                    int temp = stoi( LineProgram.program[LineProgram.program.size()-1].programToken )*3 ;
+                    SettingItSelfAndPlusNextLog( LineProgram, temp ) ; 
+                }
                 else if ( PseudoCode == "EQU" ) {
-                    int temp = stoi( LineProgram.program[LineProgram.program.size()-1].programToken ) ;
-                    LineProgram.location = PlusHexToLog( "0000",temp ) ;
+                    if ( LineProgram.program[LineProgram.program.size()-1].tokenPage == 4 ) {
+                        int temp = stoi( LineProgram.program[LineProgram.program.size()-1].programToken ) ;
+                        LineProgram.location = PlusHexToLog( "0000",temp ) ;
+                    }
+                    else if ( LineProgram.program[LineProgram.program.size()-1].programToken == "*" ) {
+                        LineProgram.location = nowLocation ;
+                    }
+
+                    else if ( LineProgram.program[LineProgram.program.size()-1].tokenPage == 6 ) {
+                        LineProgram.state = 0 ;
+                        LineProgram.finished = false ;
+                        LineProgram.ObCode ="" ;
+                        string location = "" ;
+                        string tempToken = LineProgram.program[LineProgram.program.size()-2].programToken ;
+                        if ( tempToken == "+" || tempToken == "-" || tempToken == "*" || tempToken == "/" ) {
+                            if ( LineProgram.program[LineProgram.program.size()-3].tokenPage == 6 ) {
+                                string location1 = "" ;
+                                string location2 = "" ;
+                                if ( FindThisLocation(LineProgram.program[LineProgram.program.size()-1].programToken,location2) && 
+                                     FindThisLocation(LineProgram.program[LineProgram.program.size()-3].programToken,location1) ) {
+                                    int location_num1 = stoi( location1,nullptr,16 ) ;
+                                    int location_num2 = stoi( location2,nullptr,16 ) ;
+                                    int result = 0 ;
+                                    stringstream s ;
+                                    if ( tempToken == "+" ) {
+                                        result = location_num1 + location_num2 ;
+                                    }
+                                    else if ( tempToken  == "-" ) {
+                                        result = location_num1 - location_num2 ;
+                                    }
+                                    else if ( tempToken == "*" ) {
+                                        result = location_num1 * location_num2 ;
+                                    }
+                                    else if ( tempToken == "/" ) {
+                                        result = location_num1 / location_num2 ;
+                                    }
+                                    s << hex << result ;
+                                    s >> LineProgram.location ;
+                                }
+                            }
+                        }
+                        else {
+
+                            if ( FindThisLocation(LineProgram.program[LineProgram.program.size()-1].programToken,location) ) {
+                                LineProgram.location = location ;
+                                LineProgram.state = 1 ;
+                                LineProgram.finished = true ;
+                                LineProgram.ObCode ="" ;
+                            }
+                        }
+                    }
                 }
                 else {
                     SettingItSelfAndPlusNextLog( LineProgram, 3 ) ; 
@@ -820,26 +1061,34 @@ class SIC : public Assembler {
                                 LineProgram.ObCode = hexToBinary(opcode,24) ;
                                 LineProgram.state = 1 ;
                                 LineProgram.finished = true ;
+                                SettingItSelfAndPlusNextLog( LineProgram, 3 )  ;
                             }
                             else {
                                 string opcode = "" ;
-                                opcode = LineProgram.program[i].programToken ;
+                                if ( LineProgram.program[i].tokenPage == 4 ) {
+                                    int dec_num = stoi( LineProgram.program[i].programToken,nullptr,10 ) ;
+                                    stringstream s ;
+                                    s << hex << dec_num ;
+                                    s >> opcode ;
+                                }
+                                else {
+                                    opcode = LineProgram.program[i].programToken ;
+                                }
                                 for ( ; opcode.size() < 6 ; ) {
                                     opcode = '0'+ opcode ;
                                 }
                                 LineProgram.ObCode = hexToBinary(opcode,24) ;
                                 LineProgram.state = 1 ;
                                 LineProgram.finished = true ;
+                                SettingItSelfAndPlusNextLog( LineProgram, 3 )  ;
                             }
-                            SettingItSelfAndPlusNextLog( LineProgram, 3 ) ;;
                         }
                     }
                 }
-                SettingItSelfAndPlusNextLog( LineProgram, 3 )  ;
             }
         }
         else {
-            FindLogBase() ;
+            FindLogBase( LineProgram ) ;
         }
     }
 
@@ -949,7 +1198,12 @@ class SICXE : public SIC {
         檢查第二型態的對不對 先看第一個instruction 判斷他要有一個Register還是兩個 再判斷是否合乎文法
         */
         int count = 0 ;
+        string instruction = "" ;
+        if ( program[count].tokenPage == 6 ) {
+            count ++ ;
+        }
         if ( program[count].tokenPage == 0 ) {
+            instruction = program[count].programToken ;
             switch ( g_InstructionMap[toLower(program[count].programToken)].register_number ) {
                 case 1 :  
                     if ( program.size() >= 2 ) {
@@ -966,6 +1220,21 @@ class SICXE : public SIC {
                                     return false ;
                                 }
                             }
+                        }
+                        else if ( instruction == "SVC" ) {
+                            if ( program[count].tokenPage == 4 ) {
+                                if ( count == program.size()-1 ) {
+                                    return true ;
+                                }
+                                else {
+                                    if ( program[count+1].programToken == "." ) {
+                                        return true ;
+                                    }
+                                    else {
+                                        return false ;
+                                    }
+                                }
+                            }                            
                         }
                     }
                     break ;
@@ -987,6 +1256,21 @@ class SICXE : public SIC {
                                         else {
                                             return false ;
                                         }
+                                    }
+                                }
+                                else if ( instruction == "SHIFTL" || instruction == "SHIFTR" ) {
+                                    if ( program[count].tokenPage == 4 ) {
+                                        if ( count == program.size()-1 ) {
+                                            return true ;
+                                        }
+                                        else {
+                                            if ( program[count+1].programToken == "." ) {
+                                                return true ;
+                                            }
+                                            else {
+                                                return false ;
+                                            }
+                                        }                                    
                                     }
                                 }
                             }
@@ -1102,18 +1386,23 @@ class SICXE : public SIC {
     }
 
     protected: bool CheakFormat_Three( vector<Token> cheakedProgram , int & format ) {
-        for ( int i = 0 ; i < cheakedProgram.size() ; i ++ ) {
-            if ( i == 0 && cheakedProgram[i].programToken == "+" ) {
-                ;
-            }
-            else {
-                if ( cheakedProgram[i].tokenPage == 0 ) {
-                    i ++ ;
-                    return CheakM( cheakedProgram, i ) ;                
+        if ( ( cheakedProgram[0].programToken == "RSUB" && cheakedProgram.size() == 1 ) || ( cheakedProgram.size() > 1 && cheakedProgram[1].programToken == ".") ) {
+            return true ;
+        }
+        else {
+            for ( int i = 0 ; i < cheakedProgram.size() ; i ++ ) {
+                if ( i == 0 && cheakedProgram[i].programToken == "+" ) {
+                    ;
+                }
+                else {
+                    if ( cheakedProgram[i].tokenPage == 0 ) {
+                        i ++ ;
+                        return CheakM( cheakedProgram, i ) ;                
+                    }
                 }
             }
+            return false ;
         }
-        return false ;
     }
 
     protected: bool CheakInstructCodeSysax( AssemblerRemember cheakedProgram ) override {
@@ -1171,10 +1460,20 @@ class SICXE : public SIC {
         return flag ;
     }
 
+
     public: string CountDisp( string nowlocationString, string dislocationString ) {
         int nowlocation = hexToDec( nowlocationString ) ;
         int distination = hexToDec( dislocationString  ) ;
         int final =  distination - nowlocation ;
+        if ( final < -2048 || final > 2048 ) {
+            if (base_register != "") {
+                int baselocaltion = hexToDec(base_register) ;
+                final = distination - baselocaltion ;
+                if ( final < 0 || final > 4096 ) {
+                    return "error" ;
+                }
+            }
+        }
         stringstream s ;
         s << hex << final ;
         string Disp ;
@@ -1183,54 +1482,100 @@ class SICXE : public SIC {
         return Disp ;
     }
 
-    protected: void FindDisp( AssemblerRemember &LineProgram, int bit ) {
-        
+    protected: void FindDisp( AssemblerRemember &LineProgram, int bit, bool passTwo ) {
         string label = "" ;
         string PC = "" ;
+        int label_page = 0 ;
+        bool imm = false ;
+        bool redict = false ;
         int token_page = 0 ;
         for ( int i = 0 ; i < LineProgram.program.size() && label == "" ; i ++ ) {
             if ( LineProgram.program[i].tokenPage == 0 ) {
                 i ++ ; 
-                if ( i < LineProgram.program.size() && LineProgram.program[i].tokenPage == 6 || LineProgram.program[i].tokenPage == 4 ) {
+            }
+            if ( i < LineProgram.program.size() && LineProgram.program[i].tokenPage == 6 || LineProgram.program[i].tokenPage == 4 ) {
+                if ( i != 0 ) {
                     label = LineProgram.program[i].programToken ;
-                    PC = PlusHexToLog(nowLocation,3) ;
                     token_page = LineProgram.program[i].tokenPage ;
-                    
+                }
+                if ( passTwo == false ) {
+                    PC = PlusHexToLog(nowLocation,3) ;
+                }
+                else {
+                    PC = PlusHexToLog(LineProgram.location,3) ;
+                }
+            }
+            if ( LineProgram.program[i].tokenPage == 3 && ( LineProgram.program[i].programToken == "#" || LineProgram.program[i].programToken == "@" ) ) {
+                if ( LineProgram.program[i].programToken == "#" ) {
+                    imm = true ;
+                }
+                else {
+                    redict = true ;
                 }
             }
         } // 找這行的label
         string tempObcode = LineProgram.ObCode ;
-        for ( int i = 0 ; i < temp_memory.size() && ( temp_memory[i].location != "" || temp_memory[i].state == 2 )  ; i ++ ) {
+        for ( int i = 0 ; i < temp_memory.size() && ( temp_memory[i].location != "" || temp_memory[i].state == 2 || temp_memory[i].program[0].programToken == "BASE" )  ; i ++ ) {
             if ( temp_memory[i].state != 2 ) {
                 if ( token_page != 4 ) {
                     if ( temp_memory[i].program[0].tokenPage == 6 && temp_memory[i].program[0].programToken == label ) { // 找跟他一樣的label
-                        LineProgram.ObCode = tempObcode + CountDisp(PC,temp_memory[i].location) ;
-                        LineProgram.state = 1 ;
-                        LineProgram.finished = true ; // 找的到就把他改好
+                        int nowlocation = hexToDec( PC ) ;
+                        int distination = hexToDec( temp_memory[i].location ) ;
+                            int final =  distination - nowlocation ;
+                            if (final > -2048 && final < 2048 ) {
+                                LineProgram.ObCode = tempObcode + CountDisp(PC,temp_memory[i].location) ;
+                                LineProgram.state = 1 ;
+                                LineProgram.finished = true ; // 找的到就把他改好
+                            }
+                            else {
+                                if ( base_register != "" ) {
+                                    tempObcode[9] = '1' ;
+                                    tempObcode[10] = '0' ;
+                                    LineProgram.ObCode = tempObcode + CountDisp(base_register,temp_memory[i].location) ;
+                                    LineProgram.state = 1 ;
+                                    LineProgram.finished = true ; // 找的到就把他改好                                
+                                }
+                            }
 
                     }
                     else if ( LineProgram.program.size() == 1 ) {
+                        for ( int i = 8 ; i < tempObcode.size() ; i ++  ) {
+                            tempObcode[i] = '0' ;
+                        }
                         LineProgram.ObCode = tempObcode + hexToBinary("0",bit) ;
                         LineProgram.state = 1 ;
                         LineProgram.finished = true ;
                     }
                 }
-                else {
-                    tempObcode[10] = '0' ;
+
+            }
+        } 
+        if ( LineProgram.state != 1 && LineProgram.finished != true ) {
+            if ( imm == true || redict == true  ) {
+                tempObcode[10] = '0' ;
+                if ( token_page == 4 ) {
                     LineProgram.ObCode = tempObcode + hexToBinary(label,bit) ;
                     LineProgram.state = 1 ;
                     LineProgram.finished = true ; // 找的到就把他改好
-                    break ;
                 }
             }
-        }        
+            else {
+                tempObcode[10] = '0' ;
+                if ( token_page == 4 ) {
+                    LineProgram.ObCode = tempObcode + hexToBinary(label,bit) ;
+                    LineProgram.state = 1 ;
+                    LineProgram.finished = true ; // 找的到就把他改好
+                }               
+            }
+        }       
         
     }
+
 
     protected: void Transaction_Adress( AssemblerRemember &LineProgram, int format ) override {
        LineProgram.ObCode = LineProgram.ObCode + CheakFlag( LineProgram,format ) ;
        if ( format == 3 ) {
-        FindDisp(LineProgram,12) ;
+        FindDisp(LineProgram,12,false) ;
        }
        else if ( format == 4 ) {
         FindLog(LineProgram,20) ;
@@ -1249,6 +1594,8 @@ class SICXE : public SIC {
                 temp = g_InstructionMap[toLower(LineProgram.program[i].programToken)] ;
                 stringstream s1 ;
                 stringstream s2 ;
+                int first_register = 1 ;
+                int second_register = 3 ;
                 switch ( temp.format ) {
                     case 1 :
                         LineProgram.ObCode = LineProgram.ObCode + hexToBinary(temp.opcode,8) ;
@@ -1257,13 +1604,17 @@ class SICXE : public SIC {
                         LineProgram.finished = true ; // 找的到就把他改好
                         break ;
                     case 2 :
+                        if ( LineProgram.program[0].tokenPage == 6  ) {
+                            first_register ++ ;
+                            second_register ++ ;
+                        }
                         if ( temp.register_number ==2 ) {
-                            s1 << LineProgram.program[1].tokenPosition ;
-                            s2 << LineProgram.program[3].tokenPosition ;
+                            s1 << LineProgram.program[first_register].tokenPosition ;
+                            s2 << LineProgram.program[second_register].tokenPosition ;
                             LineProgram.ObCode = LineProgram.ObCode + hexToBinary(temp.opcode,8) + hexToBinary(s1.str(),4) + hexToBinary(s2.str(),4);
                         }
                         else {
-                            s1 << LineProgram.program[1].tokenPosition ;
+                            s1 << LineProgram.program[first_register].tokenPosition ;
                             LineProgram.ObCode = LineProgram.ObCode + hexToBinary(temp.opcode,8) + hexToBinary(s1.str(),4) + hexToBinary("0",4);
                         }
                         LineProgram.state = 1 ;
@@ -1273,7 +1624,7 @@ class SICXE : public SIC {
                     case 3 :
                         LineProgram.ObCode = hexToBinary(temp.opcode,8) ;
                         LineProgram.ObCode.erase(6,2) ;
-                        if ( LineProgram.program[0].programToken == "+" ) {                           
+                        if ( LineProgram.program[0].programToken == "+" || ( LineProgram.program[0].tokenPage == 6 && LineProgram.program[1].programToken == "+" ) ) {                           
                             LineProgram.format = 4 ;
                             Transaction_Adress(LineProgram, 4) ;
                             return 4 ;
@@ -1281,6 +1632,7 @@ class SICXE : public SIC {
                         else {
                             LineProgram.format = 3 ;
                             Transaction_Adress(LineProgram, temp.format) ;
+                            return 3 ;
                         }
                         break ;
                     default :
@@ -1299,15 +1651,18 @@ class SICXE : public SIC {
                 if (! IsPseudo ) {
                     if ( LineProgram.state != 2 ) {
                         if ( LineProgram.format == 3 ) {
-                            FindDisp( LineProgram,12 ) ;
+                            FindDisp( LineProgram,12,true ) ;
                         }
                         else if ( LineProgram.format == 4 ) {
                             FindLog( LineProgram,20 ) ;
                         }
                     }                    
                 }
-                
+                if ( cheakedPseudo == "BASE" ) {
+                    FindLogBase(LineProgram) ;
+                }
             }
+            cheakedPseudo = "" ;
         }
     }
 
@@ -1476,15 +1831,10 @@ void LoadingPageToken( string file_name, Program_Token &page_token) {
 
 void LoadingInital() {
     loadingMap(g_InstructionMap) ;
-    cout << g_InstructionMap.size() << endl ;
     LoadingPageTokenInital("Table1.table",g_instructionTable ) ;
-    cout << g_instructionTable.page_token_no.size() << endl ;
     LoadingPageTokenInital("Table2.table",g_pseudoInsTable ) ;
-    cout << g_pseudoInsTable.page_token_no.size() << endl ;
     LoadingPageTokenInital("Table3.table",g_registerTable ) ;
-    cout << g_registerTable.page_token_no.size() << endl ;
     LoadingPageTokenInital("Table4.table",g_delimiterTable ) ;
-    cout << g_delimiterTable.page_token_no.size() << endl ;
 }
 
 
@@ -1493,27 +1843,50 @@ int main()
 
     LoadingInital() ;
     string file_name = "" ;
+    string chiose = "" ;
     Program_Token program_token ;
-    cin >> file_name ;
-    do {
-        int i = 0 ;        
-        LoadingPageToken(file_name,program_token) ;
-        SICXE assembler1 ;
-        for(auto TokenLine : program_token.token ) {
-            assembler1.LoadingProgram( TokenLine ) ;
-            assembler1.PrintLineMessage( i ) ;
-            i ++ ;
-        }
-        assembler1.PassOne() ;
-        assembler1.PassTwo() ;
-        assembler1.PrintAllMessage() ;
+    cout << "chiose SIC[1] or SICXE[2], other is exit" << endl ;
+    cin >> chiose ;
+    if ( chiose == "1" ) {
+        cout << "input fileName :" ;
         cin >> file_name ;
-    }while ( file_name != "0" ) ;
+        do {
+            int i = 0 ;        
+            LoadingPageToken(file_name,program_token) ;
+            SIC assembler1 ;
+            for(auto TokenLine : program_token.token ) {
+                assembler1.LoadingProgram( TokenLine ) ;
+            }
+            assembler1.PassOne() ;
+            assembler1.PassTwo() ;
+            assembler1.PrintAllMessage() ;
+            assembler1.WriteFile(file_name) ;
+            cout << "input fileName :" ;
+            cin >> file_name ;
+        }while ( file_name != "0" ) ;
+    }
+    else if ( chiose == "2" ) {
+        cout << "input fileName :" ;
+        cin >> file_name ;
+        do {
+            int i = 0 ;        
+            LoadingPageToken(file_name,program_token) ;
+            SICXE assembler1 ;
+            for(auto TokenLine : program_token.token ) {
+                assembler1.LoadingProgram( TokenLine ) ;
+            }
+            assembler1.PassOne() ;
+            assembler1.PassTwo() ;
+            assembler1.PrintAllMessage() ;
+            assembler1.WriteFile(file_name) ;
+            cout << "input fileName :" ;
+            cin >> file_name ;
+        }while ( file_name != "0" ) ;
+    }
     
     
 }
 /*
-11/18
-基礎題全部搞定 處理進階問題
-先從base開始
+目前看的到的問題都處理了
+但還有看不到的
 */
